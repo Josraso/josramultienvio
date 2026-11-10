@@ -1,5 +1,8 @@
 # Changelog - josramultienvio
 
+## 1.0.1 - 2026-11-11
+- Clave propia del módulo en el servidor de actualizaciones: ya no comparte clave con otros módulos. Además avisa al servidor cuando se desinstala y del resultado de cada actualización hecha desde la configuración (si falla, con el motivo). Sin cambios en el funcionamiento del módulo.
+
 ## 1.0.0 - 2026-11-09
 - Corrige el transporte de los pedidos que PrestaShop parte por transportista (carrito con productos que van con
   transportistas distintos, por ejemplo frío y normal). PrestaShop guarda en cada pedido el transporte de todo el

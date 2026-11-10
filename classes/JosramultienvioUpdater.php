@@ -10,6 +10,8 @@
  *   ejecución de los scripts upgrade/.
  * - En PrestaShop 8.1 o superior, la versión nueva aparece además en la pestaña
  *   nativa "Actualizaciones" del gestor de módulos (hook actionListModules).
+ * - Avisa al servidor cuando el módulo se desinstala y del resultado de cada
+ *   actualización hecha desde la configuración del módulo.
  *
  * Para usarlo en otro módulo:
  * 1. Copia este archivo a classes/ y cambia el nombre de la clase
@@ -19,7 +21,9 @@
  *      hookActionAdminControllerSetMedia() -> $updater->maybePing()
  *      hookActionListModules()             -> return $updater->getNativeModuleList()
  *      getContent(): $updater->processRequest() al principio y $updater->renderPanel()
- * 3. Un script upgrade/upgrade-X.php que llame a $updater->registerHooks().
+ *      uninstall(): $updater->notifyUninstall() al principio
+ * 3. La clave API_KEY es propia de cada módulo (ficha del módulo en el panel del servidor).
+ * 4. Un script upgrade/upgrade-X.php que llame a $updater->registerHooks().
  *
  * Compatible con PrestaShop 1.6 a 9 y PHP 5.6 a 8.x.
  *
@@ -35,8 +39,8 @@ class JosramultienvioUpdater
     /** URL del servidor de actualizaciones, con barra final (Ajustes del panel) */
     const SERVER_URL = 'https://actualizaciones.donxarope.com/';
 
-    /** Clave de API del servidor de actualizaciones (Ajustes del panel) */
-    const API_KEY = 'a04b4dcf6c807ca24c3a5083b7f855fed91476c0';
+    /** Clave de este módulo en el servidor de actualizaciones: solo vale para él (ficha del módulo en el panel) */
+    const API_KEY = 'ce0ae055ad4a71cd67d3293cf2493bcad4cc02e9';
 
     /** Segundos entre avisos automáticos */
     const CHECK_EVERY = 86400;
@@ -150,15 +154,12 @@ class JosramultienvioUpdater
             return 'El servidor de actualizaciones no está configurado en este módulo.';
         }
 
-        $shopUrl = Tools::getShopDomainSsl(true) . __PS_BASE_URI__;
-        $site = Tools::strtolower(Tools::getShopDomainSsl(false) . __PS_BASE_URI__);
-
         $response = $this->httpPost(rtrim(self::SERVER_URL, '/') . '/api.php?action=check', array(
             'key' => self::API_KEY,
             'module' => $this->module->name,
             'version' => $this->module->version,
-            'site' => $site,
-            'shop_url' => $shopUrl,
+            'site' => $this->site(),
+            'shop_url' => Tools::getShopDomainSsl(true) . __PS_BASE_URI__,
             'ps_version' => _PS_VERSION_,
             'php_version' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '.' . PHP_RELEASE_VERSION,
             'force' => $force ? '1' : '0',
@@ -176,6 +177,7 @@ class JosramultienvioUpdater
             'update_available' => !empty($response['update_available']),
             'changelog' => isset($response['changelog']) ? (string) $response['changelog'] : '',
             'download_url' => isset($response['download_url']) ? (string) $response['download_url'] : '',
+            'notice' => isset($response['notice']) ? (string) $response['notice'] : '',
             'checked_at' => time(),
             'for_version' => $this->module->version,
         );
@@ -199,9 +201,60 @@ class JosramultienvioUpdater
         if (!isset($info['for_version']) || $info['for_version'] !== $this->module->version) {
             $info['update_available'] = !empty($info['latest']) && version_compare($info['latest'], $this->module->version, '>');
             $info['download_url'] = '';
+            $info['notice'] = '';
         }
 
         return $info;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Avisos al servidor: desinstalación y resultado de una actualización */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Para uninstall() del módulo: avisa de que se desinstala. Nunca lanza errores
+     * ni impide desinstalar.
+     */
+    public function notifyUninstall()
+    {
+        $this->notify('uninstall', array(), 3);
+    }
+
+    /**
+     * Resultado de una actualización: 'ok' o 'error' con el motivo.
+     */
+    protected function report($status, $message = '')
+    {
+        $message = trim(preg_replace('/\s+/', ' ', strip_tags((string) $message)));
+        $this->notify('report', array(
+            'status' => $status,
+            'message' => Tools::substr($message, 0, 480),
+            'version' => $this->module->version,
+        ), 4);
+    }
+
+    protected function notify($action, array $data, $timeout)
+    {
+        if (!$this->isConfigured()) {
+            return;
+        }
+
+        try {
+            $this->httpPost(rtrim(self::SERVER_URL, '/') . '/api.php?action=' . $action, array_merge(array(
+                'key' => self::API_KEY,
+                'module' => $this->module->name,
+                'site' => $this->site(),
+            ), $data), $timeout);
+        } catch (Exception $e) {
+            // Un aviso que no llega no debe molestar a la tienda
+        } catch (Throwable $e) {
+        }
+    }
+
+    /** Dominio y carpeta de la tienda: así la identifica el servidor */
+    protected function site()
+    {
+        return Tools::strtolower(Tools::getShopDomainSsl(false) . __PS_BASE_URI__);
     }
 
     /* ------------------------------------------------------------------ */
@@ -226,10 +279,17 @@ class JosramultienvioUpdater
         $upgrade = $this->runPendingUpgrades();
         if ($upgrade !== true) {
             $html .= $upgrade;
+            $this->report('error', $upgrade);
         }
 
         if (!$this->isConfigured()) {
             return $html;
+        }
+
+        if (Tools::getValue('josraupd_done') && $upgrade === true) {
+            // El servidor apunta ya la versión nueva, sin esperar al aviso diario
+            $this->check(6);
+            $this->report('ok');
         }
 
         if (Tools::isSubmit('josraupd_check')) {
@@ -283,6 +343,9 @@ class JosramultienvioUpdater
             $body .= '<p>Versión instalada: <strong>' . Tools::safeOutput($this->module->version) . '</strong>'
                 . ($checked !== '' ? '. Última comprobación: ' . $checked . '.' : '. Aún no se ha comprobado si hay versiones nuevas.')
                 . '</p>';
+            if (!empty($info['notice'])) {
+                $body .= '<div class="alert alert-info">' . Tools::safeOutput($info['notice']) . '</div>';
+            }
         }
 
         $buttons = '<button type="submit" name="josraupd_check" value="1" class="btn btn-default"><i class="icon-refresh"></i> Comprobar actualizaciones</button>';
@@ -331,6 +394,19 @@ class JosramultienvioUpdater
             return 'No hay ninguna versión nueva que instalar.';
         }
 
+        $result = $this->installFiles($info);
+        if ($result !== true) {
+            $this->report('error', 'Al actualizar a la ' . $info['latest'] . ': ' . $result);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return true|string
+     */
+    protected function installFiles(array $info)
+    {
         $name = $this->module->name;
         $work = _PS_CACHE_DIR_ . 'josraupd/';
         if (!is_dir($work) && !@mkdir($work, 0755, true)) {
