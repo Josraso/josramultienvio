@@ -2,14 +2,15 @@
 /**
  * Actualizaciones del módulo desde el servidor de actualizaciones de josra.
  *
- * - Una vez al día, cuando un empleado entra en el back-office, avisa al
+ * - Cada 6 horas, cuando un empleado entra en el back-office, avisa al
  *   servidor de que el módulo está instalado (módulo, versión, dominio de la
  *   tienda y versiones de PrestaShop y PHP) y recibe la última versión.
  * - En la configuración del módulo muestra si hay versión nueva y permite
  *   actualizar desde la propia tienda, con copia de seguridad previa y
  *   ejecución de los scripts upgrade/.
  * - En PrestaShop 8.1 o superior, la versión nueva aparece además en la pestaña
- *   nativa "Actualizaciones" del gestor de módulos (hook actionListModules).
+ *   nativa "Actualizaciones" del gestor de módulos (hook actionListModules),
+ *   y al abrir el gestor se vuelve a preguntar al servidor (como mucho cada 5 minutos).
  * - Avisa al servidor cuando el módulo se desinstala y del resultado de cada
  *   actualización hecha desde la configuración del módulo.
  *
@@ -42,8 +43,14 @@ class JosramultienvioUpdater
     /** Clave de este módulo en el servidor de actualizaciones: solo vale para él (ficha del módulo en el panel) */
     const API_KEY = 'ce0ae055ad4a71cd67d3293cf2493bcad4cc02e9';
 
-    /** Segundos entre avisos automáticos */
-    const CHECK_EVERY = 86400;
+    /** Segundos entre avisos automáticos (6 horas) */
+    const CHECK_EVERY = 21600;
+
+    /** Al abrir el gestor de módulos (8.1+) se vuelve a preguntar si el último aviso tiene más de estos segundos */
+    const CHECK_ON_LIST = 300;
+
+    /** Si el servidor no contesta, las comprobaciones del gestor de módulos esperan estos segundos (todos los módulos) */
+    const RETRY_AFTER_FAIL = 600;
 
     /** @var Module */
     protected $module;
@@ -95,7 +102,8 @@ class JosramultienvioUpdater
     /**
      * Respuesta para actionListModules (8.1+): la versión nueva y su descarga,
      * para que salga en la pestaña "Actualizaciones" del gestor de módulos.
-     * Usa lo guardado en el último aviso: no llama al servidor.
+     * Si el último aviso tiene más de CHECK_ON_LIST segundos, pregunta antes al servidor,
+     * para ver lo pendiente de todos los módulos sin entrar en cada uno.
      */
     public function getNativeModuleList()
     {
@@ -103,6 +111,7 @@ class JosramultienvioUpdater
             return array();
         }
 
+        $this->refreshForList();
         $info = $this->getInfo();
         if (empty($info['update_available']) || empty($info['latest']) || empty($info['download_url'])) {
             return array();
@@ -120,7 +129,7 @@ class JosramultienvioUpdater
     /* ------------------------------------------------------------------ */
 
     /**
-     * Aviso diario desde el back-office. Nunca lanza errores.
+     * Aviso periódico desde el back-office (cada CHECK_EVERY segundos). Nunca lanza errores.
      */
     public function maybePing()
     {
@@ -138,6 +147,28 @@ class JosramultienvioUpdater
             $this->check(4);
         } catch (Exception $e) {
             // El back-office nunca debe fallar por esto
+        } catch (Throwable $e) {
+        }
+    }
+
+    /**
+     * Comprobación rápida al listar módulos. Nunca lanza errores. Si el servidor
+     * no contesta, ningún módulo vuelve a intentarlo desde aquí en RETRY_AFTER_FAIL segundos.
+     */
+    protected function refreshForList()
+    {
+        try {
+            $now = time();
+            if ((int) Configuration::getGlobalValue($this->key . '_TS') > $now - self::CHECK_ON_LIST
+                || (int) Configuration::getGlobalValue('JOSRAUPD_FAIL_TS') > $now - self::RETRY_AFTER_FAIL) {
+                return;
+            }
+            Configuration::updateGlobalValue($this->key . '_TS', $now);
+            if (!is_array($this->check(3))) {
+                Configuration::updateGlobalValue('JOSRAUPD_FAIL_TS', $now);
+            }
+        } catch (Exception $e) {
+            // El gestor de módulos nunca debe fallar por esto
         } catch (Throwable $e) {
         }
     }
