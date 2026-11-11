@@ -36,7 +36,7 @@ class Josramultienvio extends Module
     {
         $this->name = 'josramultienvio';
         $this->tab = 'shipping_logistics';
-        $this->version = '1.0.2';
+        $this->version = '1.0.3';
         $this->author = 'josra';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -80,7 +80,7 @@ class Josramultienvio extends Module
         // Aviso al servidor de actualizaciones (no impide desinstalar si no responde)
         $this->getUpdater()->notifyUninstall();
 
-        foreach (array(self::CFG_FIX, self::CFG_FRONT, self::CFG_MSG, 'JOSRAMULTIENVIO_UPD_TS', 'JOSRAMULTIENVIO_UPD_INFO') as $key) {
+        foreach (array(self::CFG_FIX, self::CFG_FRONT, self::CFG_MSG, 'JOSRAMULTIENVIO_UPD_TS', 'JOSRAMULTIENVIO_UPD_INFO', 'JOSRAMULTIENVIO_UPD_SU', 'JOSRAMULTIENVIO_UPD_LT') as $key) {
             Configuration::deleteByName($key);
         }
 

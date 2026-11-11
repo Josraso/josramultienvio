@@ -1,5 +1,9 @@
 # Changelog - josramultienvio
 
+## 1.0.3 - 2026-11-11
+- Actualizador: si el servidor de actualizaciones cambia de dominio, el módulo aprende la dirección nueva solo.
+- Actualizador preparado para licencias (desactivadas en este módulo).
+
 ## 1.0.2 - 2026-11-11
 - Actualizaciones más a mano: en PrestaShop 8.1 o superior, al abrir Módulos > Gestor de módulos se pregunta al servidor en ese momento (como mucho cada 5 minutos), así que en la pestaña «Actualizaciones» se ve lo pendiente de todos los módulos sin entrar en cada uno. El aviso automático pasa de una vez al día a cada 6 horas. Sin cambios en el funcionamiento del módulo.
 
