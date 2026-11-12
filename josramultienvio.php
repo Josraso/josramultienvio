@@ -36,7 +36,7 @@ class Josramultienvio extends Module
     {
         $this->name = 'josramultienvio';
         $this->tab = 'shipping_logistics';
-        $this->version = '1.0.3';
+        $this->version = '1.0.4';
         $this->author = 'josra';
         $this->need_instance = 0;
         $this->bootstrap = true;

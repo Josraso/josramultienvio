@@ -2,7 +2,7 @@
 <module>
     <name>josramultienvio</name>
     <displayName><![CDATA[Envíos múltiples por transportista]]></displayName>
-    <version><![CDATA[1.0.3]]></version>
+    <version><![CDATA[1.0.4]]></version>
     <description><![CDATA[Corrige el transporte de los pedidos que PrestaShop parte por transportista y muestra cada envío en el checkout.]]></description>
     <author><![CDATA[josra]]></author>
     <tab><![CDATA[shipping_logistics]]></tab>

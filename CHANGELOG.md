@@ -1,5 +1,8 @@
 # Changelog - josramultienvio
 
+## 1.0.4
+- La licencia la decide el panel del servidor de actualizaciones: si se exige y la tienda no la tiene, el módulo se desactiva solo; al tenerla, o al dejar de exigirse, vuelve a activarse.
+
 ## 1.0.3 - 2026-11-11
 - Actualizador: si el servidor de actualizaciones cambia de dominio, el módulo aprende la dirección nueva solo.
 - Actualizador preparado para licencias (desactivadas en este módulo).
